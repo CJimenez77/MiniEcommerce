@@ -86,7 +86,3 @@ stripe listen --forward-to localhost:8080/payment/webhook
 - [ ] Fase 6: notificaciones
 - [ ] Fase 7: observabilidad (metricas, logs, tracing)
 - [ ] Fase 8: todo integrado en Docker Compose
-
-## Licencia
-
-MIT
