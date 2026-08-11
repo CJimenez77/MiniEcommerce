@@ -15,6 +15,22 @@ services:
       timeout: 5s
       retries: 5
 
+  order-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: order
+      POSTGRES_PASSWORD: order
+      POSTGRES_DB: order_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order -d order_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   catalog-service:
     build:
       context: ../services/catalog-service
@@ -25,6 +41,27 @@ services:
     depends_on:
       catalog-db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  order-service:
+    build:
+      context: ../services/order-service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://order:order@order-db:5432/order_db
+      CATALOG_SERVICE_URL: http://catalog-service:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
 
 volumes:
   catalog_db_data:
+  order_db_data:
