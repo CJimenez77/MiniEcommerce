@@ -31,6 +31,22 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   catalog-service:
     build:
       context: ../services/catalog-service
@@ -61,7 +77,20 @@ services:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
+    
+  auth-service:
+    build:
+      context: ../services/auth-service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://auth_user:auth_pass@auth-db:5432/auth_db
+      JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+    ports:
+      - "8002:8000"
+    depends_on:
+      auth-db:
+        condition: service_healthy
 
 volumes:
   catalog_db_data:
   order_db_data:
+  auth_db_data:
