@@ -15,6 +15,7 @@ class OrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    user_id: uuid.UUID
     product_id: uuid.UUID
     quantity: int
     unit_price: float
