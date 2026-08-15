@@ -47,15 +47,29 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   catalog-service:
     build:
       context: ../services/catalog-service
     environment:
       DATABASE_URL: postgresql+asyncpg://catalog:catalog@catalog-db:5432/catalog_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8001:8000"
     depends_on:
       catalog-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -71,6 +85,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://order:order@order-db:5432/order_db
       CATALOG_SERVICE_URL: http://catalog-service:8000
       JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8000:8000"
     depends_on:
@@ -78,7 +93,9 @@ services:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
-    
+      rabbitmq:
+        condition: service_healthy
+
   auth-service:
     build:
       context: ../services/auth-service

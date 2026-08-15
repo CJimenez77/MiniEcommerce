@@ -4,6 +4,7 @@ import uuid
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +12,7 @@ from app.database import get_db
 from app.models import Order
 from app.schemas import OrderCreate, OrderRead
 from app.security import decode_access_token
+from app.messaging import publish_order_created
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -27,6 +29,8 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     return uuid.UUID(payload["sub"])
 
+def get_rabbitmq_channel(request: Request):
+    return request.app.state.rabbitmq_channel
 
 @router.get("", response_model=list[OrderRead])
 async def list_orders(
@@ -54,6 +58,7 @@ async def create_order(
     payload: OrderCreate,
     db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
+    channel=Depends(get_rabbitmq_channel),
 ):
     async with httpx.AsyncClient() as client:
         try:
@@ -81,4 +86,9 @@ async def create_order(
     db.add(order)
     await db.commit()
     await db.refresh(order)
+
+    await publish_order_created(
+        channel, order_id=order.id, product_id=order.product_id, quantity=order.quantity
+    )
+
     return order
