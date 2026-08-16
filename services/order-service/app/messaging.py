@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import uuid
@@ -9,9 +10,18 @@ RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 EXCHANGE_NAME = "orders"
 
 
-async def get_rabbitmq_channel() -> aio_pika.abc.AbstractChannel:
-    connection = await aio_pika.connect_robust(RABBITMQ_URL)
-    return await connection.channel()
+async def get_rabbitmq_channel(
+    max_attempts: int = 10, delay_seconds: int = 3
+) -> aio_pika.abc.AbstractChannel:
+    for attempt in range(1, max_attempts + 1):
+        try:
+            connection = await aio_pika.connect_robust(RABBITMQ_URL)
+            return await connection.channel()
+        except Exception as exc:
+            if attempt == max_attempts:
+                raise
+            print(f"RabbitMQ no disponible aún (intento {attempt}/{max_attempts}): {exc}")
+            await asyncio.sleep(delay_seconds)
 
 
 async def publish_order_created(
