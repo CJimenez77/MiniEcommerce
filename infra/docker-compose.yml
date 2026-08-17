@@ -69,6 +69,21 @@ services:
       timeout: 5s
       retries: 5
 
+  traefik:
+    image: traefik:v3.1
+    command:
+      - "--api.insecure=true"
+      - "--providers.consulcatalog=true"
+      - "--providers.consulcatalog.endpoint.address=consul:8500"
+      - "--providers.consulcatalog.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8080:80"
+      - "8081:8080"
+    depends_on:
+      consul:
+        condition: service_healthy
+
   catalog-service:
     build:
       context: ../services/catalog-service

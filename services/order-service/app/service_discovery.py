@@ -16,7 +16,11 @@ async def register_service(max_attempts: int = 10, delay_seconds: int = 3) -> No
         "Name": SERVICE_NAME,
         "Address": SERVICE_NAME,
         "Port": SERVICE_PORT,
-        "Tags": ["fastapi", "traefik.enable=true"],
+        "Tags": [
+            "traefik.enable=true",
+            "traefik.http.routers.order.rule=PathPrefix(`/orders`)",
+            "traefik.http.routers.order.entrypoints=web",
+        ],
         "Check": {
             "HTTP": f"http://{SERVICE_NAME}:{SERVICE_PORT}/health",
             "Interval": "10s",

@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import httpx
@@ -7,7 +8,7 @@ SERVICE_NAME = "auth-service"
 SERVICE_PORT = 8000
 
 
-async def register_service() -> None:
+async def register_service(max_attempts: int = 10, delay_seconds: int = 3) -> None:
     service_id = f"{SERVICE_NAME}-1"
 
     payload = {
@@ -15,7 +16,11 @@ async def register_service() -> None:
         "Name": SERVICE_NAME,
         "Address": SERVICE_NAME,
         "Port": SERVICE_PORT,
-        "Tags": ["fastapi", "traefik.enable=true"],
+        "Tags": [
+            "traefik.enable=true",
+            "traefik.http.routers.auth.rule=PathPrefix(`/auth`)",
+            "traefik.http.routers.auth.entrypoints=web",
+        ],
         "Check": {
             "HTTP": f"http://{SERVICE_NAME}:{SERVICE_PORT}/health",
             "Interval": "10s",
@@ -25,10 +30,18 @@ async def register_service() -> None:
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.put(
-            f"{CONSUL_URL}/v1/agent/service/register", json=payload
-        )
-        response.raise_for_status()
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = await client.put(
+                    f"{CONSUL_URL}/v1/agent/service/register", json=payload
+                )
+                response.raise_for_status()
+                return
+            except httpx.RequestError as exc:
+                if attempt == max_attempts:
+                    raise
+                print(f"Consul no disponible aún (intento {attempt}/{max_attempts}): {exc}")
+                await asyncio.sleep(delay_seconds)
 
 
 async def deregister_service() -> None:
