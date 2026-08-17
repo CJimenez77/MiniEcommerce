@@ -100,6 +100,7 @@ services:
       CATALOG_SERVICE_URL: http://catalog-service:8000
       JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CONSUL_URL: http://consul:8500
     ports:
       - "8000:8000"
     depends_on:
@@ -108,6 +109,8 @@ services:
       catalog-service:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      consul:
         condition: service_healthy
 
   auth-service:
