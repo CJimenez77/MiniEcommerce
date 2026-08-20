@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app.database import Base, engine
 from app.messaging import get_rabbitmq_channel
-from app.routers import orders
+from app.routers import payments
 from app.service_discovery import deregister_service, register_service
 
 
@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI):
     await deregister_service()
 
 
-app = FastAPI(title="order-service", lifespan=lifespan)
-app.include_router(orders.router)
+app = FastAPI(title="payment-service", lifespan=lifespan)
+app.include_router(payments.router)
 
 
 @app.get("/health")

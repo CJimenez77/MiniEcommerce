@@ -4,7 +4,7 @@ import os
 import httpx
 
 CONSUL_URL = os.getenv("CONSUL_URL", "http://localhost:8500")
-SERVICE_NAME = "order-service"
+SERVICE_NAME = "payment-service"
 SERVICE_PORT = 8000
 
 
@@ -18,8 +18,8 @@ async def register_service(max_attempts: int = 10, delay_seconds: int = 3) -> No
         "Port": SERVICE_PORT,
         "Tags": [
             "traefik.enable=true",
-            "traefik.http.routers.order.rule=PathPrefix(`/orders`)",
-            "traefik.http.routers.order.entrypoints=web",
+            "traefik.http.routers.payment.rule=PathPrefix(`/payments`)",
+            "traefik.http.routers.payment.entrypoints=web",
         ],
         "Check": {
             "HTTP": f"http://{SERVICE_NAME}:{SERVICE_PORT}/health",

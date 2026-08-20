@@ -2,21 +2,24 @@ import os
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+import stripe
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Order
-from app.schemas import OrderCreate, OrderRead
+from app.messaging import publish_payment_event
+from app.models import Payment, PaymentStatus
+from app.schemas import PaymentCreate, PaymentRead
 from app.security import decode_access_token
-from app.messaging import publish_order_created
 
-router = APIRouter(prefix="/orders", tags=["orders"])
+router = APIRouter(tags=["payments"])
 
-CATALOG_SERVICE_URL = os.getenv("CATALOG_SERVICE_URL", "http://localhost:8001")
+ORDER_SERVICE_URL = os.getenv("ORDER_SERVICE_URL", "http://localhost:8000")
+
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 bearer_scheme = HTTPBearer()
 
@@ -29,66 +32,97 @@ async def get_current_user_id(
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
     return uuid.UUID(payload["sub"])
 
+
 def get_rabbitmq_channel(request: Request):
     return request.app.state.rabbitmq_channel
 
-@router.get("", response_model=list[OrderRead])
-async def list_orders(
-    db: AsyncSession = Depends(get_db),
-    user_id: uuid.UUID = Depends(get_current_user_id),
-):
-    result = await db.execute(select(Order).where(Order.user_id == user_id))
-    return result.scalars().all()
 
-
-@router.get("/{order_id}", response_model=OrderRead)
-async def get_order(
-    order_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    user_id: uuid.UUID = Depends(get_current_user_id),
-):
-    order = await db.get(Order, order_id)
-    if not order or order.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
-    return order
-
-
-@router.post("", response_model=OrderRead, status_code=201)
-async def create_order(
-    payload: OrderCreate,
+@router.post("/payments", response_model=PaymentRead, status_code=201)
+async def create_payment(
+    payload: PaymentCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user_id: uuid.UUID = Depends(get_current_user_id),
     channel=Depends(get_rabbitmq_channel),
 ):
+    auth_header = request.headers.get("Authorization")
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
-                f"{CATALOG_SERVICE_URL}/products/{payload.product_id}"
+                f"{ORDER_SERVICE_URL}/orders/{payload.order_id}",
+                headers={"Authorization": auth_header},
             )
         except httpx.RequestError:
-            raise HTTPException(status_code=503, detail="catalog-service no disponible")
+            raise HTTPException(status_code=503, detail="order-service no disponible")
 
     if response.status_code == 404:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
     response.raise_for_status()
 
-    product = response.json()
+    order = response.json()
 
-    if product["stock"] < payload.quantity:
-        raise HTTPException(status_code=400, detail="Stock insuficiente")
+    if order["status"] != "pending":
+        raise HTTPException(status_code=400, detail="La orden no está pendiente de pago")
 
-    order = Order(
-        user_id=user_id,
-        product_id=payload.product_id,
-        quantity=payload.quantity,
-        unit_price=product["price"],
+    amount = order["unit_price"] * order["quantity"]
+
+    intent = stripe.PaymentIntent.create(
+        amount=int(amount * 100),
+        currency="mxn",
+        metadata={"order_id": str(payload.order_id)},
     )
-    db.add(order)
+
+    payment = Payment(
+        order_id=payload.order_id,
+        stripe_payment_intent_id=intent.id,
+        amount=amount,
+    )
+    db.add(payment)
     await db.commit()
-    await db.refresh(order)
+    await db.refresh(payment)
 
-    await publish_order_created(
-        channel, order_id=order.id, product_id=order.product_id, quantity=order.quantity
+    return payment
+
+
+@router.post("/payments/webhooks/stripe", status_code=200)
+async def stripe_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    channel=Depends(get_rabbitmq_channel),
+):
+    payload_body = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload_body, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except (ValueError, stripe.error.SignatureVerificationError):
+        raise HTTPException(status_code=400, detail="Firma de webhook inválida")
+
+    event_type = event["type"]
+    stripe_payment_intent_id = event["data"]["object"]["id"]
+
+    result = await db.execute(
+        select(Payment).where(Payment.stripe_payment_intent_id == stripe_payment_intent_id)
     )
+    payment = result.scalar_one_or_none()
 
-    return order
+    if payment is None:
+        return {"status": "ignored"}
+
+    if event_type == "payment_intent.succeeded":
+        payment.status = PaymentStatus.SUCCEEDED
+        await db.commit()
+        await publish_payment_event(
+            channel, "payment.succeeded", order_id=payment.order_id, payment_id=payment.id
+        )
+    elif event_type == "payment_intent.payment_failed":
+        payment.status = PaymentStatus.FAILED
+        await db.commit()
+        await publish_payment_event(
+            channel, "payment.failed", order_id=payment.order_id, payment_id=payment.id
+        )
+
+    return {"status": "received"}

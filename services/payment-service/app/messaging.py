@@ -7,7 +7,7 @@ import aio_pika
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 
-EXCHANGE_NAME = "orders"
+EXCHANGE_NAME = "payments"
 
 
 async def get_rabbitmq_channel(
@@ -24,11 +24,11 @@ async def get_rabbitmq_channel(
             await asyncio.sleep(delay_seconds)
 
 
-async def publish_order_created(
+async def publish_payment_event(
     channel: aio_pika.abc.AbstractChannel,
+    routing_key: str,
     order_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
+    payment_id: uuid.UUID,
 ) -> None:
     exchange = await channel.declare_exchange(
         EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
@@ -37,8 +37,7 @@ async def publish_order_created(
     message_body = json.dumps(
         {
             "order_id": str(order_id),
-            "product_id": str(product_id),
-            "quantity": quantity,
+            "payment_id": str(payment_id),
         }
     ).encode()
 
@@ -48,4 +47,4 @@ async def publish_order_created(
         delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
     )
 
-    await exchange.publish(message, routing_key="order.created")
+    await exchange.publish(message, routing_key=routing_key)    
