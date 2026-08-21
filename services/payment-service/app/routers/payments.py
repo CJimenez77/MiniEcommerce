@@ -68,10 +68,11 @@ async def create_payment(
     amount = order["unit_price"] * order["quantity"]
 
     intent = stripe.PaymentIntent.create(
-        amount=int(amount * 100),
-        currency="mxn",
-        metadata={"order_id": str(payload.order_id)},
-    )
+    amount=int(amount * 100),
+    currency="mxn",
+    metadata={"order_id": str(payload.order_id)},
+    automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+)
 
     payment = Payment(
         order_id=payload.order_id,
