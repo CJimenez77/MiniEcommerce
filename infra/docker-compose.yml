@@ -47,6 +47,22 @@ services:
       timeout: 5s
       retries: 5
 
+  payment-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: payment
+      POSTGRES_PASSWORD: payment
+      POSTGRES_DB: payment_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -143,7 +159,29 @@ services:
       consul:
         condition: service_healthy
 
+  payment-service:
+    build:
+      context: ../services/payment-service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://payment:payment@payment-db:5432/payment_db
+      ORDER_SERVICE_URL: http://order-service:8000
+      JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CONSUL_URL: http://consul:8500
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    ports:
+      - "8003:8000"
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+
 volumes:
   catalog_db_data:
   order_db_data:
   auth_db_data:
+  payment_db_data:
