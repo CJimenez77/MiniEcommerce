@@ -129,7 +129,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://order:order@order-db:5432/order_db
       CATALOG_SERVICE_URL: http://catalog-service:8000
-      JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       CONSUL_URL: http://consul:8500
     ports:
@@ -149,7 +149,7 @@ services:
       context: ../services/auth-service
     environment:
       DATABASE_URL: postgresql+asyncpg://auth_user:auth_pass@auth-db:5432/auth_db
-      JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       CONSUL_URL: http://consul:8500
     ports:
       - "8002:8000"
@@ -165,7 +165,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://payment:payment@payment-db:5432/payment_db
       ORDER_SERVICE_URL: http://order-service:8000
-      JWT_SECRET_KEY: "99dddb482e3be845c4854da5a09032a877c5088d2430df07a41ed556e8105f5b"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       CONSUL_URL: http://consul:8500
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+asyncpg://order_user:order_pass@localhost:5434/order_db"
+    "DATABASE_URL", "postgresql+asyncpg://order:order@localhost:5434/order_db"
 )
 
 engine = create_async_engine(DATABASE_URL, echo=True)

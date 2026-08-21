@@ -62,9 +62,16 @@ Cada microservicio es independiente: tiene su propio codigo, su propia base de d
 
 ## Puesta en marcha
 
+1. Clonar el repositorio y configurar variables de entorno:
 ```bash
 git clone <url-del-repositorio>
 cd <nombre-del-repositorio>
+cp infra/.env.example infra/.env
+```
+*(Edita `infra/.env` con tus claves reales o utiliza las de prueba por defecto)*
+
+2. Iniciar los servicios con Docker Compose:
+```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
 
